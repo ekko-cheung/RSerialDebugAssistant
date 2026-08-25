@@ -79,6 +79,7 @@
 |------|------|------|
 | Windows | `.exe`（NSIS） | 在版本 Tag 上由 GitHub Actions 构建 |
 | macOS（Apple Silicon） | `.dmg` | 在版本 Tag 上由 GitHub Actions 构建 |
+| Linux | `.AppImage` | Ubuntu 22.04 构建；推送 `main` 时作为工件持续构建，版本 Tag 时随 Release 发布 |
 
 只有同时满足「提交在 `release` 分支上」「`version.json` 有变更」「推送了版本 Tag」三个条件才会编译。详见 [`.github/BRANCHING.md`](.github/BRANCHING.md)。
 
@@ -109,6 +110,7 @@ cargo tauri build
 编译后的应用程序二进制文件位置：
 - **Windows**: `src-tauri/target/release/bundle/nsis/`
 - **macOS**: `src-tauri/target/release/bundle/dmg/`
+- **Linux**: `src-tauri/target/release/bundle/appimage/`
 
 ## 🚀 快速开始
 

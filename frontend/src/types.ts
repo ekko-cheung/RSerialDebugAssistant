@@ -132,3 +132,17 @@ export interface DisplaySettings {
   special_char_config: SpecialCharConfigBackend;
   show_timestamps: boolean;
 }
+
+// Terminal mode types
+export interface TerminalData {
+  /** Raw bytes received since the requested cursor */
+  bytes: number[];
+  /** Cursor value to pass on the next poll */
+  next_cursor: number;
+  /** True if the ring buffer was overwritten and some data was lost */
+  overflowed: boolean;
+}
+
+// Terminal send/display settings
+export type TerminalSendMode = 'line' | 'char';
+export type TerminalLineEnding = 'None' | 'CR' | 'LF' | 'CRLF';

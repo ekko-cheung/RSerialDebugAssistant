@@ -206,5 +206,24 @@
     "loopSendTitle": "循环发送已选指令",
     "listSend": "发送选中",
     "endingNone": "无"
+  },
+  "terminal": {
+    "title": "终端",
+    "logView": "日志",
+    "terminalView": "终端",
+    "clearScreen": "清屏",
+    "sendMode": "发送模式",
+    "lineMode": "行模式",
+    "charMode": "字符模式",
+    "lineEnding": "行尾",
+    "none": "无",
+    "localEcho": "本地回显",
+    "localEchoHint": "仅字符模式生效：将键盘输入回显到终端",
+    "encoding": "编码",
+    "notConnected": "未连接 — 请先连接串口",
+    "connected": "已连接",
+    "disconnected": "已断开",
+    "dataLost": "⚠ 数据过快，部分数据已丢失",
+    "ready": "终端就绪"
   }
 }

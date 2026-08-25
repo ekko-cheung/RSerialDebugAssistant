@@ -79,6 +79,7 @@ Download the [latest GitHub Release](https://github.com/Gyanano/RSerialDebugAssi
 |----------|--------|-------|
 | Windows  | `.exe` (NSIS) | Built by GitHub Actions on version tags |
 | macOS (Apple Silicon) | `.dmg` | Built by GitHub Actions on version tags |
+| Linux | `.AppImage` | Built on Ubuntu 22.04; built continuously as an artifact on `main` pushes and published on version tags |
 
 Release builds run only when a version tag is pushed **and** that commit is on `release` **and** `version.json` changed. See [`.github/BRANCHING.md`](.github/BRANCHING.md).
 
@@ -109,6 +110,7 @@ cargo tauri build
 The compiled application binaries will be located in:
 - **Windows**: `src-tauri/target/release/bundle/nsis/`
 - **macOS**: `src-tauri/target/release/bundle/dmg/`
+- **Linux**: `src-tauri/target/release/bundle/appimage/`
 
 ## 🚀 Quick Start
 

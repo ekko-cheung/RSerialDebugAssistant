@@ -21,6 +21,9 @@ pub struct SerialManager {
     shutdown_flag: Arc<AtomicBool>,
     max_log_entries: Arc<Mutex<usize>>,
     frame_segmentation_config: Arc<Mutex<FrameSegmentationConfig>>,
+    // Terminal mode raw RX ring buffer
+    raw_rx_buffer: Arc<Mutex<RawRxBuffer>>,
+    terminal_active: Arc<AtomicBool>,
     // Recording file handles
     text_file: Arc<Mutex<Option<File>>>,
     raw_file: Arc<Mutex<Option<File>>>,
@@ -31,6 +34,60 @@ pub struct SerialManager {
     timezone_offset_minutes: Arc<Mutex<i32>>,
     // Display settings for pre-formatted log rendering
     display_settings: Arc<Mutex<DisplaySettings>>,
+}
+
+/// Ring buffer holding raw received bytes for the interactive terminal view.
+/// When the buffer is full, the oldest bytes are dropped; `total_written`
+/// keeps growing so callers can detect dropped data via their cursor.
+struct RawRxBuffer {
+    bytes: VecDeque<u8>,
+    total_written: u64,
+    capacity: usize,
+}
+
+const TERMINAL_BUFFER_CAPACITY: usize = 256 * 1024;
+
+impl RawRxBuffer {
+    fn new() -> Self {
+        Self {
+            bytes: VecDeque::new(),
+            total_written: 0,
+            capacity: TERMINAL_BUFFER_CAPACITY,
+        }
+    }
+
+    fn push(&mut self, data: &[u8]) {
+        self.total_written += data.len() as u64;
+        for &byte in data {
+            if self.bytes.len() >= self.capacity {
+                self.bytes.pop_front();
+            }
+            self.bytes.push_back(byte);
+        }
+    }
+
+    /// Return all bytes written after `cursor`. If `cursor` is older than the
+    /// oldest buffered byte, data was dropped and `overflowed` is set.
+    fn drain_from(&self, cursor: u64) -> TerminalData {
+        let oldest = self.total_written.saturating_sub(self.bytes.len() as u64);
+        let overflowed = cursor < oldest;
+        let data: Vec<u8> = if overflowed {
+            self.bytes.iter().copied().collect()
+        } else {
+            let skip = (cursor - oldest) as usize;
+            self.bytes.iter().skip(skip).copied().collect()
+        };
+        TerminalData {
+            bytes: data,
+            next_cursor: self.total_written,
+            overflowed,
+        }
+    }
+
+    fn clear(&mut self) {
+        self.bytes.clear();
+        self.total_written = 0;
+    }
 }
 
 #[derive(Debug, Default)]
@@ -59,6 +116,8 @@ impl SerialManager {
             shutdown_flag: Arc::new(AtomicBool::new(false)),
             max_log_entries: Arc::new(Mutex::new(1000)),
             frame_segmentation_config: Arc::new(Mutex::new(FrameSegmentationConfig::default())),
+            raw_rx_buffer: Arc::new(Mutex::new(RawRxBuffer::new())),
+            terminal_active: Arc::new(AtomicBool::new(false)),
             text_file: Arc::new(Mutex::new(None)),
             raw_file: Arc::new(Mutex::new(None)),
             text_file_path: Arc::new(Mutex::new(None)),
@@ -157,6 +216,8 @@ impl SerialManager {
         let raw_file = Arc::clone(&self.raw_file);
         let timezone_offset = Arc::clone(&self.timezone_offset_minutes);
         let display_settings = Arc::clone(&self.display_settings);
+        let raw_rx_buffer = Arc::clone(&self.raw_rx_buffer);
+        let terminal_active = Arc::clone(&self.terminal_active);
         let port_name_clone = port_name.to_string();
         let shutdown_flag = Arc::clone(&self.shutdown_flag);
         let mut read_port = port.try_clone()?;
@@ -189,6 +250,13 @@ impl SerialManager {
                         let received_bytes = &buffer[..bytes_read];
                         accumulated_data.extend_from_slice(received_bytes);
                         last_data_time = Instant::now();
+
+                        // Feed raw terminal buffer when terminal mode is active
+                        if terminal_active.load(Ordering::Relaxed) {
+                            if let Ok(mut guard) = raw_rx_buffer.lock() {
+                                guard.push(received_bytes);
+                            }
+                        }
 
                         // Write to raw recording file (raw bytes, no framing)
                         if let Ok(mut guard) = raw_file.lock() {
@@ -468,6 +536,10 @@ impl SerialManager {
             self.port_name = None;
             self.config = None;
 
+            // Reset terminal mode state so a fresh connection starts clean
+            self.terminal_active.store(false, Ordering::Relaxed);
+            self.clear_terminal_buffer();
+
             // Reset stats
             if let Ok(mut stats_guard) = self.stats.lock() {
                 *stats_guard = SerialStats::default();
@@ -662,6 +734,32 @@ impl SerialManager {
             .lock()
             .map(|guard| guard.clone())
             .unwrap_or_default()
+    }
+
+    // Terminal mode methods
+
+    /// Enable/disable terminal mode buffering. When enabled, the raw RX
+    /// buffer is cleared so the terminal view only shows new data.
+    pub fn set_terminal_active(&self, active: bool) {
+        self.terminal_active.store(active, Ordering::Relaxed);
+        if active {
+            self.clear_terminal_buffer();
+        }
+    }
+
+    /// Get raw bytes received since `cursor` (see RawRxBuffer::drain_from).
+    pub fn get_terminal_data(&self, cursor: u64) -> TerminalData {
+        self.raw_rx_buffer
+            .lock()
+            .map(|guard| guard.drain_from(cursor))
+            .unwrap_or_default()
+    }
+
+    /// Clear the raw terminal RX buffer and reset the cursor.
+    pub fn clear_terminal_buffer(&self) {
+        if let Ok(mut guard) = self.raw_rx_buffer.lock() {
+            guard.clear();
+        }
     }
 
     // Display settings methods

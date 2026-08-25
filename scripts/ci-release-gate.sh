@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate for the dual-platform release workflow.
+# Gate for the multi-platform release workflow (Windows, macOS, Linux AppImage).
 # All three must pass:
 #   1. The tagged commit is on origin/release
 #   2. version.json changed vs the previous version tag

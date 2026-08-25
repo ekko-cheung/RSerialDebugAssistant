@@ -71,6 +71,12 @@ Artifacts:
 
 - Windows x64 NSIS `.exe` — unsigned; this is what the in-app updater looks for
 - macOS Apple Silicon `.dmg` — Developer ID signed and notarized when the Apple secrets are present
+- Linux `.AppImage` — built on Ubuntu 22.04
+
+The workflow also triggers on any push to `main` and builds a Linux `.AppImage`
+there (uploaded as a workflow artifact only, no release), so packaging on
+Ubuntu 22.04 is verified continuously. The full Windows/macOS/Linux release
+only runs on a version tag push.
 
 macOS signing uses GitHub Actions secrets (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_TEAM_ID`, `APPLE_API_ISSUER`, `APPLE_API_KEY`, `APPLE_API_KEY_P8`). The Windows job does not receive those secrets.
 

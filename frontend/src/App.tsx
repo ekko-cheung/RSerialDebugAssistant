@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Settings, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Settings, PanelLeftClose, PanelLeft, List, Terminal } from 'lucide-react';
 import PortSelector from './components/PortSelector';
 import ConfigPanel from './components/ConfigPanel';
 import LogViewer from './components/LogViewer';
 import SendPanel, { SEND_PANEL_MIN_HEIGHTS } from './components/SendPanel';
+import TerminalView from './components/TerminalView';
 import StatusBar from './components/StatusBar';
 import SettingsModal from './components/SettingsModal';
 import { SerialPortInfo, SerialConfig, LogEntry, ConnectionStatus, DataFormat, ChecksumConfig, QuickCommandList, QuickCommand, LineEnding, TextEncoding, FrameSegmentationConfig } from './types';
@@ -23,6 +24,7 @@ const STORAGE_KEY_SIDEBAR_WIDTH = 'serialDebug_sidebarWidth';
 const STORAGE_KEY_SIDEBAR_COLLAPSED = 'serialDebug_sidebarCollapsed';
 const STORAGE_KEY_LOG_VIEWER_HEIGHT = 'serialDebug_logViewerHeight';
 const STORAGE_KEY_FRAME_SEGMENTATION = 'serialDebug_frameSegmentation';
+const STORAGE_KEY_VIEW_MODE = 'serialDebug_viewMode';
 const INITIAL_COMMANDS = 20;
 
 // Layout constants
@@ -146,6 +148,12 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [userHasSelectedPort, setUserHasSelectedPort] = useState(false);
 
+  // Main content view mode: log viewer or interactive terminal
+  const [viewMode, setViewMode] = useState<'logs' | 'terminal'>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_VIEW_MODE);
+    return saved === 'terminal' ? 'terminal' : 'logs';
+  });
+
   // Layout state
   const [sidebarWidth, setSidebarWidth] = useState<number>(getSavedSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(getSavedSidebarCollapsed);
@@ -202,6 +210,10 @@ function App() {
       localStorage.setItem(STORAGE_KEY_LOG_VIEWER_HEIGHT, logViewerHeight.toString());
     }
   }, [logViewerHeight]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_VIEW_MODE, viewMode);
+  }, [viewMode]);
 
   // Adjust log viewer height when send panel min height changes
   useEffect(() => {
@@ -804,68 +816,107 @@ function App() {
 
         {/* Main Content Area */}
         <div ref={mainContentRef} className="flex-1 flex flex-col relative" style={{ backgroundColor: colors.bgMain }}>
-          {/* Log Viewer */}
+          {/* View Switcher */}
           <div
-            className="flex flex-col min-h-0"
-            style={{
-              height: logViewerHeight !== null ? logViewerHeight : undefined,
-              flex: logViewerHeight !== null ? 'none' : `${DEFAULT_LOG_VIEWER_RATIO} 1 0%`,
-              minHeight: MIN_LOG_VIEWER_HEIGHT,
-            }}
-          >
-            <LogViewer
-              logs={logs}
-              onClear={handleClearLogs}
-              onExport={handleExportLogs}
-              isConnected={connectionStatus.is_connected}
-            />
-          </div>
-
-          {/* Vertical Resize Handle */}
-          <div
-            className="h-1 cursor-row-resize relative z-30 group"
-            onMouseDown={handleVerticalResizeStart}
-            style={{
-              backgroundColor: isResizingVertical ? colors.accent : colors.borderDark,
-            }}
+            className="h-9 px-4 flex items-center flex-shrink-0"
+            style={{ backgroundColor: colors.bgHeader, borderBottom: `1px solid ${colors.borderDark}` }}
           >
             <div
-              className="absolute inset-x-0 -top-1 -bottom-1 group-hover:bg-opacity-50 transition-colors"
-              style={{
-                backgroundColor: isResizingVertical ? colors.accent : 'transparent',
-              }}
-            />
-            <div
-              className="absolute inset-x-0 top-0 h-1 opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ backgroundColor: colors.accent }}
-            />
+              className="p-0.5 rounded-[6px] flex"
+              style={{ backgroundColor: colors.bgInput, border: `1px solid ${colors.borderLight}` }}
+            >
+              <Button
+                variant={viewMode === 'logs' ? 'default' : 'ghost'}
+                size="xs"
+                className="gap-1 h-6 px-3"
+                onClick={() => setViewMode('logs')}
+              >
+                <List size={12} />
+                <span>{t('terminal.logView')}</span>
+              </Button>
+              <Button
+                variant={viewMode === 'terminal' ? 'default' : 'ghost'}
+                size="xs"
+                className="gap-1 h-6 px-3"
+                onClick={() => setViewMode('terminal')}
+              >
+                <Terminal size={12} />
+                <span>{t('terminal.terminalView')}</span>
+              </Button>
+            </div>
           </div>
 
-          {/* Send Panel */}
-          <div
-            className="flex-1 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.2)] z-20"
-            style={{
-              minHeight: sendPanelMinHeight,
-            }}
-          >
-            <SendPanel
-              value={sendText}
-              onChange={setSendText}
-              format={sendFormat}
-              onFormatChange={setSendFormat}
-              onSend={handleSendData}
-              isConnected={connectionStatus.is_connected}
-              checksumConfig={checksumConfig}
-              onChecksumConfigChange={setChecksumConfig}
-              quickCommandLists={quickCommandLists}
-              currentQuickCommandListId={currentQuickCommandListId}
-              onQuickCommandListsChange={setQuickCommandLists}
-              onCurrentQuickCommandListChange={setCurrentQuickCommandListId}
-              onSendQuickCommand={handleSendQuickCommand}
-              onSendSelectedQuickCommands={handleSendSelectedQuickCommands}
-              onMinHeightChange={setSendPanelMinHeight}
-            />
-          </div>
+          {viewMode === 'logs' ? (
+            <>
+              {/* Log Viewer */}
+              <div
+                className="flex flex-col min-h-0"
+                style={{
+                  height: logViewerHeight !== null ? logViewerHeight : undefined,
+                  flex: logViewerHeight !== null ? 'none' : `${DEFAULT_LOG_VIEWER_RATIO} 1 0%`,
+                  minHeight: MIN_LOG_VIEWER_HEIGHT,
+                }}
+              >
+                <LogViewer
+                  logs={logs}
+                  onClear={handleClearLogs}
+                  onExport={handleExportLogs}
+                  isConnected={connectionStatus.is_connected}
+                />
+              </div>
+
+              {/* Vertical Resize Handle */}
+              <div
+                className="h-1 cursor-row-resize relative z-30 group"
+                onMouseDown={handleVerticalResizeStart}
+                style={{
+                  backgroundColor: isResizingVertical ? colors.accent : colors.borderDark,
+                }}
+              >
+                <div
+                  className="absolute inset-x-0 -top-1 -bottom-1 group-hover:bg-opacity-50 transition-colors"
+                  style={{
+                    backgroundColor: isResizingVertical ? colors.accent : 'transparent',
+                  }}
+                />
+                <div
+                  className="absolute inset-x-0 top-0 h-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ backgroundColor: colors.accent }}
+                />
+              </div>
+
+              {/* Send Panel */}
+              <div
+                className="flex-1 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.2)] z-20"
+                style={{
+                  minHeight: sendPanelMinHeight,
+                }}
+              >
+                <SendPanel
+                  value={sendText}
+                  onChange={setSendText}
+                  format={sendFormat}
+                  onFormatChange={setSendFormat}
+                  onSend={handleSendData}
+                  isConnected={connectionStatus.is_connected}
+                  checksumConfig={checksumConfig}
+                  onChecksumConfigChange={setChecksumConfig}
+                  quickCommandLists={quickCommandLists}
+                  currentQuickCommandListId={currentQuickCommandListId}
+                  onQuickCommandListsChange={setQuickCommandLists}
+                  onCurrentQuickCommandListChange={setCurrentQuickCommandListId}
+                  onSendQuickCommand={handleSendQuickCommand}
+                  onSendSelectedQuickCommands={handleSendSelectedQuickCommands}
+                  onMinHeightChange={setSendPanelMinHeight}
+                />
+              </div>
+            </>
+          ) : (
+            /* Terminal View */
+            <div className="flex-1 min-h-0">
+              <TerminalView isConnected={connectionStatus.is_connected} />
+            </div>
+          )}
         </div>
       </div>
 

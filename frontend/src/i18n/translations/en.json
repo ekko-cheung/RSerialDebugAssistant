@@ -206,5 +206,24 @@
     "loopSendTitle": "Send selected commands repeatedly",
     "listSend": "Send Selected",
     "endingNone": "None"
+  },
+  "terminal": {
+    "title": "Terminal",
+    "logView": "Logs",
+    "terminalView": "Terminal",
+    "clearScreen": "Clear Screen",
+    "sendMode": "Send Mode",
+    "lineMode": "Line",
+    "charMode": "Character",
+    "lineEnding": "Line Ending",
+    "none": "None",
+    "localEcho": "Local Echo",
+    "localEchoHint": "Only applies in character mode: echo keyboard input locally",
+    "encoding": "Encoding",
+    "notConnected": "Not connected — connect a serial port first",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "dataLost": "⚠ Data too fast, some data was lost",
+    "ready": "Terminal ready"
   }
 }

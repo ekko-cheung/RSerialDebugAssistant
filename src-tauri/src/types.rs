@@ -232,3 +232,14 @@ impl Default for DisplaySettings {
         }
     }
 }
+
+// Terminal mode types
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TerminalData {
+    /// Raw bytes received since the requested cursor
+    pub bytes: Vec<u8>,
+    /// Cursor value to pass on the next poll (equals total bytes written so far)
+    pub next_cursor: u64,
+    /// True if the ring buffer was overwritten and some data was lost
+    pub overflowed: bool,
+}
