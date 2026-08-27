@@ -23,7 +23,6 @@ pub struct SerialManager {
     frame_segmentation_config: Arc<Mutex<FrameSegmentationConfig>>,
     // Terminal mode raw RX ring buffer
     raw_rx_buffer: Arc<Mutex<RawRxBuffer>>,
-    terminal_active: Arc<AtomicBool>,
     // Recording file handles
     text_file: Arc<Mutex<Option<File>>>,
     raw_file: Arc<Mutex<Option<File>>>,
@@ -117,7 +116,6 @@ impl SerialManager {
             max_log_entries: Arc::new(Mutex::new(1000)),
             frame_segmentation_config: Arc::new(Mutex::new(FrameSegmentationConfig::default())),
             raw_rx_buffer: Arc::new(Mutex::new(RawRxBuffer::new())),
-            terminal_active: Arc::new(AtomicBool::new(false)),
             text_file: Arc::new(Mutex::new(None)),
             raw_file: Arc::new(Mutex::new(None)),
             text_file_path: Arc::new(Mutex::new(None)),
@@ -217,7 +215,6 @@ impl SerialManager {
         let timezone_offset = Arc::clone(&self.timezone_offset_minutes);
         let display_settings = Arc::clone(&self.display_settings);
         let raw_rx_buffer = Arc::clone(&self.raw_rx_buffer);
-        let terminal_active = Arc::clone(&self.terminal_active);
         let port_name_clone = port_name.to_string();
         let shutdown_flag = Arc::clone(&self.shutdown_flag);
         let mut read_port = port.try_clone()?;
@@ -251,11 +248,10 @@ impl SerialManager {
                         accumulated_data.extend_from_slice(received_bytes);
                         last_data_time = Instant::now();
 
-                        // Feed raw terminal buffer when terminal mode is active
-                        if terminal_active.load(Ordering::Relaxed) {
-                            if let Ok(mut guard) = raw_rx_buffer.lock() {
-                                guard.push(received_bytes);
-                            }
+                        // Feed raw terminal buffer (always captured; the
+                        // frontend reads it only while the terminal view is open)
+                        if let Ok(mut guard) = raw_rx_buffer.lock() {
+                            guard.push(received_bytes);
                         }
 
                         // Write to raw recording file (raw bytes, no framing)
@@ -536,8 +532,7 @@ impl SerialManager {
             self.port_name = None;
             self.config = None;
 
-            // Reset terminal mode state so a fresh connection starts clean
-            self.terminal_active.store(false, Ordering::Relaxed);
+            // Reset terminal state so a fresh connection starts clean
             self.clear_terminal_buffer();
 
             // Reset stats
@@ -737,15 +732,6 @@ impl SerialManager {
     }
 
     // Terminal mode methods
-
-    /// Enable/disable terminal mode buffering. When enabled, the raw RX
-    /// buffer is cleared so the terminal view only shows new data.
-    pub fn set_terminal_active(&self, active: bool) {
-        self.terminal_active.store(active, Ordering::Relaxed);
-        if active {
-            self.clear_terminal_buffer();
-        }
-    }
 
     /// Get raw bytes received since `cursor` (see RawRxBuffer::drain_from).
     pub fn get_terminal_data(&self, cursor: u64) -> TerminalData {

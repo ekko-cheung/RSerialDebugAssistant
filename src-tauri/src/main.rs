@@ -195,23 +195,9 @@ async fn get_frame_segmentation(state: State<'_, AppState>) -> Result<FrameSegme
 // Terminal mode commands
 
 #[tauri::command]
-async fn set_terminal_active(state: State<'_, AppState>, active: bool) -> Result<(), String> {
-    let manager = state.serial_manager.lock().unwrap();
-    manager.set_terminal_active(active);
-    Ok(())
-}
-
-#[tauri::command]
 async fn get_terminal_data(state: State<'_, AppState>, cursor: u64) -> Result<TerminalData, String> {
     let manager = state.serial_manager.lock().unwrap();
     Ok(manager.get_terminal_data(cursor))
-}
-
-#[tauri::command]
-async fn clear_terminal_buffer(state: State<'_, AppState>) -> Result<(), String> {
-    let manager = state.serial_manager.lock().unwrap();
-    manager.clear_terminal_buffer();
-    Ok(())
 }
 
 // Recording commands
@@ -389,9 +375,7 @@ fn main() {
             get_log_limit,
             set_frame_segmentation,
             get_frame_segmentation,
-            set_terminal_active,
             get_terminal_data,
-            clear_terminal_buffer,
             set_log_directory,
             get_log_directory,
             set_timezone_offset,

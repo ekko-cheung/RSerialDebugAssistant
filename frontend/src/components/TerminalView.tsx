@@ -50,6 +50,7 @@ const TerminalView: React.FC<TerminalViewProps> = ({ isConnected }) => {
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lineBufferRef = useRef('');
   const wasConnectedRef = useRef(isConnected);
+  const lastPollErrorRef = useRef('');
 
   // Settings state (persisted) + refs for stable event handlers
   const [sendMode, setSendMode] = useState<TerminalSendMode>(() => {
@@ -164,6 +165,10 @@ const TerminalView: React.FC<TerminalViewProps> = ({ isConnected }) => {
   const pollTerminalData = useCallback(async () => {
     try {
       const result = await invoke<TerminalData>('get_terminal_data', { cursor: cursorRef.current });
+      if (lastPollErrorRef.current) {
+        // Error cleared — let a future error print again
+        lastPollErrorRef.current = '';
+      }
       if (result.bytes.length > 0) {
         const text = decoderRef.current?.decode(new Uint8Array(result.bytes)) ?? '';
         if (text) {
@@ -176,6 +181,14 @@ const TerminalView: React.FC<TerminalViewProps> = ({ isConnected }) => {
       cursorRef.current = result.next_cursor;
     } catch (error) {
       console.error('Failed to poll terminal data:', error);
+      // Show the failure inside the terminal so it is not silent (e.g. stale
+      // backend that does not know the command yet). Throttled to one line
+      // per distinct message.
+      const message = error instanceof Error ? error.message : String(error);
+      if (lastPollErrorRef.current !== message) {
+        lastPollErrorRef.current = message;
+        termRef.current?.writeln(`\r\n[terminal] get_terminal_data failed: ${message}\r\n`);
+      }
     }
   }, [t]);
 
@@ -255,14 +268,6 @@ const TerminalView: React.FC<TerminalViewProps> = ({ isConnected }) => {
       termRef.current?.writeln(`\r\n=== ${t('terminal.disconnected')} ===\r\n`);
     }
   }, [isConnected, t]);
-
-  // Notify backend about terminal view activity (buffering on/off)
-  useEffect(() => {
-    invoke('set_terminal_active', { active: true }).catch(console.error);
-    return () => {
-      invoke('set_terminal_active', { active: false }).catch(console.error);
-    };
-  }, []);
 
   // Fit terminal when the container resizes
   useEffect(() => {
