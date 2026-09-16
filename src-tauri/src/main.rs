@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use tauri::State;
 
 mod serial_manager;
+mod modbus;
 mod types;
 mod updater;
 
@@ -101,6 +102,16 @@ async fn send_data(
 
     let mut manager = state.serial_manager.lock().unwrap();
     manager.send_data(bytes)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn modbus_request(
+    state: State<'_, AppState>,
+    request: ModbusRequest,
+) -> Result<ModbusResponse, String> {
+    let mut manager = state.serial_manager.lock().unwrap();
+    manager.modbus_request(request)
         .map_err(|e| e.to_string())
 }
 
@@ -364,6 +375,7 @@ fn main() {
             connect_to_port,
             disconnect_port,
             send_data,
+            modbus_request,
             get_connection_status,
             get_logs,
             clear_logs,

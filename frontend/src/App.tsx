@@ -8,7 +8,7 @@ import SendPanel, { SEND_PANEL_MIN_HEIGHTS } from './components/SendPanel';
 import TerminalView from './components/TerminalView';
 import StatusBar from './components/StatusBar';
 import SettingsModal from './components/SettingsModal';
-import { SerialPortInfo, SerialConfig, LogEntry, ConnectionStatus, DataFormat, ChecksumConfig, QuickCommandList, QuickCommand, LineEnding, TextEncoding, FrameSegmentationConfig } from './types';
+import { SerialPortInfo, SerialConfig, LogEntry, ConnectionStatus, DataFormat, ChecksumConfig, QuickCommandList, QuickCommand, LineEnding, TextEncoding, FrameSegmentationConfig, ModbusRequest, ModbusResponse } from './types';
 import { useTheme } from './contexts/ThemeContext';
 import { useTranslation } from './i18n';
 import { appendChecksum } from './utils/checksum';
@@ -556,6 +556,21 @@ function App() {
     }
   };
 
+  const handleModbusRequest = async (request: ModbusRequest): Promise<ModbusResponse> => {
+    if (!connectionStatus.is_connected) {
+      throw new Error(t('modbus.notConnected'));
+    }
+
+    try {
+      const response = await invoke<ModbusResponse>('modbus_request', { request });
+      await updateStatus();
+      return response;
+    } catch (error) {
+      console.error('Failed to execute Modbus request:', error);
+      throw error;
+    }
+  };
+
   const handleClearLogs = async () => {
     try {
       await invoke('clear_logs');
@@ -907,6 +922,7 @@ function App() {
                   onCurrentQuickCommandListChange={setCurrentQuickCommandListId}
                   onSendQuickCommand={handleSendQuickCommand}
                   onSendSelectedQuickCommands={handleSendSelectedQuickCommands}
+                  onModbusRequest={handleModbusRequest}
                   onMinHeightChange={setSendPanelMinHeight}
                 />
               </div>

@@ -48,6 +48,7 @@ Whether you're debugging Arduino projects, communicating with industrial sensors
 - **Dual Data Formats** - Send and receive as Text (UTF-8/GBK) or Hexadecimal
 - **Connection Statistics** - Real-time tracking of bytes sent/received and connection duration
 - **Multiple Text Encodings** - Support for UTF-8 and GBK character encoding
+- **Modbus RTU** - Read/write coils (01/05/0F) and holding/input registers (03/04/06/10), with automatic CRC-16 and response parsing
 
 ### 🚀 Advanced Features
 - **Auto-Update** - In-app update checker with GitHub Release integration
@@ -160,7 +161,14 @@ The development app will launch automatically with hot-reload enabled.
    - Logs display in text or hexadecimal format
    - Special characters are visualized for clarity
 
-6. **Save and Export**
+6. **Use Modbus RTU**
+   - Switch the send panel to **Modbus** mode
+   - Enter the unit ID, zero-based PDU address, and function
+   - Coils support read, write single, and write multiple; registers support holding/input reads and single/multiple holding-register writes
+   - Values accept decimal and 0x hexadecimal notation
+   - The request gets an automatic Modbus RTU CRC-16; validated responses appear in the panel and communication log
+
+7. **Save and Export**
    - Enable recording to automatically log all communication
    - Export logs in TXT format with full metadata
    - Customize log directory and maximum entries in Settings
@@ -426,4 +434,3 @@ This project stands on the shoulders of amazing open-source projects:
 ⭐ **If you find this project helpful, please consider giving it a star on GitHub!**
 
 Version history lives on [GitHub Releases](https://github.com/Gyanano/RSerialDebugAssistant/releases). Each tagged build also gets notes generated from commits since the previous tag.
-

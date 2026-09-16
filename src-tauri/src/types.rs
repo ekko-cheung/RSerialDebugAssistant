@@ -73,6 +73,43 @@ pub enum DataFormat {
     Hex,
 }
 
+// Modbus RTU request/response types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ModbusFunction {
+    ReadCoils,
+    WriteSingleCoil,
+    WriteMultipleCoils,
+    ReadHoldingRegisters,
+    ReadInputRegisters,
+    WriteSingleRegister,
+    WriteMultipleRegisters,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModbusRequest {
+    pub unit_id: u8,
+    pub function: ModbusFunction,
+    pub address: u16,
+    pub quantity: u16,
+    #[serde(default)]
+    pub coil_values: Vec<bool>,
+    #[serde(default)]
+    pub register_values: Vec<u16>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModbusResponse {
+    pub unit_id: u8,
+    pub function_code: u8,
+    pub raw_frame: Vec<u8>,
+    pub is_exception: bool,
+    pub exception_code: Option<u8>,
+    pub coils: Vec<bool>,
+    pub registers: Vec<u16>,
+    pub address: Option<u16>,
+    pub value: Option<u16>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum TextEncoding {
     #[default]

@@ -26,6 +26,37 @@ export type DataFormat = 'Text' | 'Hex';
 export type Direction = 'Sent' | 'Received';
 export type TextEncoding = 'utf-8' | 'gbk';
 
+// Modbus RTU operations supported by the built-in request/response panel
+export type ModbusFunction =
+  | 'ReadCoils'
+  | 'WriteSingleCoil'
+  | 'WriteMultipleCoils'
+  | 'ReadHoldingRegisters'
+  | 'ReadInputRegisters'
+  | 'WriteSingleRegister'
+  | 'WriteMultipleRegisters';
+
+export interface ModbusRequest {
+  unit_id: number;
+  function: ModbusFunction;
+  address: number;
+  quantity: number;
+  coil_values: boolean[];
+  register_values: number[];
+}
+
+export interface ModbusResponse {
+  unit_id: number;
+  function_code: number;
+  raw_frame: number[];
+  is_exception: boolean;
+  exception_code: number | null;
+  coils: boolean[];
+  registers: number[];
+  address: number | null;
+  value: number | null;
+}
+
 // Checksum types
 export type ChecksumType = 'None' | 'XOR' | 'ADD8' | 'CRC8' | 'CRC16' | 'CCITT-CRC16';
 

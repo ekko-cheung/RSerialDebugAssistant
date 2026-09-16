@@ -1,4 +1,5 @@
 use crate::types::*;
+use crate::modbus;
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use log::{debug, error, info, warn};
@@ -23,6 +24,8 @@ pub struct SerialManager {
     frame_segmentation_config: Arc<Mutex<FrameSegmentationConfig>>,
     // Terminal mode raw RX ring buffer
     raw_rx_buffer: Arc<Mutex<RawRxBuffer>>,
+    // Raw RX bytes retained for a Modbus request/response transaction.
+    modbus_rx_buffer: Arc<Mutex<VecDeque<u8>>>,
     // Recording file handles
     text_file: Arc<Mutex<Option<File>>>,
     raw_file: Arc<Mutex<Option<File>>>,
@@ -45,6 +48,7 @@ struct RawRxBuffer {
 }
 
 const TERMINAL_BUFFER_CAPACITY: usize = 256 * 1024;
+const MODBUS_BUFFER_CAPACITY: usize = 64 * 1024;
 
 impl RawRxBuffer {
     fn new() -> Self {
@@ -116,6 +120,7 @@ impl SerialManager {
             max_log_entries: Arc::new(Mutex::new(1000)),
             frame_segmentation_config: Arc::new(Mutex::new(FrameSegmentationConfig::default())),
             raw_rx_buffer: Arc::new(Mutex::new(RawRxBuffer::new())),
+            modbus_rx_buffer: Arc::new(Mutex::new(VecDeque::new())),
             text_file: Arc::new(Mutex::new(None)),
             raw_file: Arc::new(Mutex::new(None)),
             text_file_path: Arc::new(Mutex::new(None)),
@@ -215,6 +220,7 @@ impl SerialManager {
         let timezone_offset = Arc::clone(&self.timezone_offset_minutes);
         let display_settings = Arc::clone(&self.display_settings);
         let raw_rx_buffer = Arc::clone(&self.raw_rx_buffer);
+        let modbus_rx_buffer = Arc::clone(&self.modbus_rx_buffer);
         let port_name_clone = port_name.to_string();
         let shutdown_flag = Arc::clone(&self.shutdown_flag);
         let mut read_port = port.try_clone()?;
@@ -252,6 +258,19 @@ impl SerialManager {
                         // frontend reads it only while the terminal view is open)
                         if let Ok(mut guard) = raw_rx_buffer.lock() {
                             guard.push(received_bytes);
+                        }
+
+                        // Keep a separate bounded copy for the synchronous
+                        // Modbus request/response path. The normal log
+                        // segmentation is intentionally independent of RTU
+                        // framing.
+                        if let Ok(mut guard) = modbus_rx_buffer.lock() {
+                            for &byte in received_bytes {
+                                if guard.len() >= MODBUS_BUFFER_CAPACITY {
+                                    guard.pop_front();
+                                }
+                                guard.push_back(byte);
+                            }
                         }
 
                         // Write to raw recording file (raw bytes, no framing)
@@ -534,6 +553,7 @@ impl SerialManager {
 
             // Reset terminal state so a fresh connection starts clean
             self.clear_terminal_buffer();
+            self.clear_modbus_buffer();
 
             // Reset stats
             if let Ok(mut stats_guard) = self.stats.lock() {
@@ -588,6 +608,73 @@ impl SerialManager {
         } else {
             Err(anyhow!("No port available"))
         }
+    }
+
+    /// Send one Modbus RTU request and wait for the matching response.
+    pub fn modbus_request(&mut self, request: ModbusRequest) -> Result<ModbusResponse> {
+        if !self.is_connected {
+            return Err(anyhow!("No port is currently open"));
+        }
+
+        let frame = modbus::build_request(&request)?;
+        self.clear_modbus_buffer();
+        self.send_data(frame)?;
+
+        let timeout_ms = self
+            .config
+            .as_ref()
+            .map(|config| config.timeout.clamp(1, 60_000))
+            .unwrap_or(1_000);
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+        let expected_function = request.function.code();
+
+        loop {
+            if let Some(response) = self.take_modbus_response(&request, expected_function) {
+                return response;
+            }
+
+            if Instant::now() >= deadline {
+                return Err(anyhow!(
+                    "Modbus response timeout after {} ms",
+                    timeout_ms
+                ));
+            }
+
+            thread::sleep(Duration::from_millis(2));
+        }
+    }
+
+    fn clear_modbus_buffer(&self) {
+        if let Ok(mut buffer) = self.modbus_rx_buffer.lock() {
+            buffer.clear();
+        }
+    }
+
+    fn take_modbus_response(
+        &self,
+        request: &ModbusRequest,
+        expected_function: u8,
+    ) -> Option<Result<ModbusResponse>> {
+        let mut buffer = self.modbus_rx_buffer.lock().ok()?;
+        let bytes: Vec<u8> = buffer.iter().copied().collect();
+        let exception_function = expected_function | 0x80;
+        let start = bytes.windows(2).position(|pair| {
+            pair[0] == request.unit_id
+                && (pair[1] == expected_function || pair[1] == exception_function)
+        })?;
+
+        if start > 0 {
+            buffer.drain(..start);
+        }
+
+        let current: Vec<u8> = buffer.iter().copied().collect();
+        let response_length = modbus::expected_response_len(current[1], &current)?;
+        if current.len() < response_length {
+            return None;
+        }
+
+        let frame: Vec<u8> = buffer.drain(..response_length).collect();
+        Some(modbus::parse_response(&frame, request))
     }
 
     pub fn get_status(&self) -> ConnectionStatus {

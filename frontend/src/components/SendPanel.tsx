@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { Send, Shield, ChevronDown, ChevronUp, List, FileText } from 'lucide-react';
-import { DataFormat, ChecksumType, ChecksumConfig, QuickCommandList, QuickCommand, LineEnding } from '../types';
+import { Send, Shield, ChevronDown, ChevronUp, List, FileText, Cpu } from 'lucide-react';
+import { DataFormat, ChecksumType, ChecksumConfig, QuickCommandList, QuickCommand, LineEnding, ModbusRequest, ModbusResponse } from '../types';
 import QuickCommandPanel from './QuickCommandPanel';
+import ModbusPanel from './ModbusPanel';
 import { useTheme } from '../contexts/ThemeContext';
 import { useTranslation } from '../i18n';
 import { getChecksumLength, calculateChecksum } from '../utils/checksum';
@@ -16,7 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-type SendMode = 'normal' | 'quickCommand';
+type SendMode = 'normal' | 'quickCommand' | 'modbus';
 
 // Minimum heights for different modes (exported for use in App.tsx)
 export const SEND_PANEL_MIN_HEIGHTS = {
@@ -25,6 +26,7 @@ export const SEND_PANEL_MIN_HEIGHTS = {
   normalHex: 220,            // Header + textarea (min) + controls + quick insert row
   normalHexChecksum: 256,    // + checksum expanded row
   quickCommand: 280,         // Header + quick command panel
+  modbus: 330,               // Header + Modbus controls + response
 };
 
 // Format hex input: filter non-hex chars, add spaces every 2 chars
@@ -60,6 +62,7 @@ interface SendPanelProps {
   onCurrentQuickCommandListChange: (listId: string) => void;
   onSendQuickCommand: (content: string, isHex: boolean, lineEnding: LineEnding) => void;
   onSendSelectedQuickCommands: (commands: QuickCommand[]) => void;
+  onModbusRequest: (request: ModbusRequest) => Promise<ModbusResponse>;
   // Callback to report current minimum height requirement
   onMinHeightChange?: (minHeight: number) => void;
 }
@@ -79,6 +82,7 @@ const SendPanel: React.FC<SendPanelProps> = ({
   onCurrentQuickCommandListChange,
   onSendQuickCommand,
   onSendSelectedQuickCommands,
+  onModbusRequest,
   onMinHeightChange,
 }) => {
   const { colors } = useTheme();
@@ -215,6 +219,8 @@ const SendPanel: React.FC<SendPanelProps> = ({
     let minHeight: number;
     if (sendMode === 'quickCommand') {
       minHeight = SEND_PANEL_MIN_HEIGHTS.quickCommand;
+    } else if (sendMode === 'modbus') {
+      minHeight = SEND_PANEL_MIN_HEIGHTS.modbus;
     } else if (format === 'Hex') {
       minHeight = checksumConfig.type !== 'None' && isChecksumExpanded
         ? SEND_PANEL_MIN_HEIGHTS.normalHexChecksum
@@ -318,7 +324,11 @@ const SendPanel: React.FC<SendPanelProps> = ({
           <div className="flex items-center space-x-2" style={{ color: colors.textSecondary }}>
             <Send size={14} style={{ color: colors.textTertiary }} />
             <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: colors.textPrimary }}>
-              {sendMode === 'normal' ? t('sendPanel.payload') : t('sendPanel.quickCommands')}
+              {sendMode === 'normal'
+                ? t('sendPanel.payload')
+                : sendMode === 'modbus'
+                  ? t('sendPanel.modbus')
+                  : t('sendPanel.quickCommands')}
             </span>
           </div>
 
@@ -344,6 +354,15 @@ const SendPanel: React.FC<SendPanelProps> = ({
             >
               <List size={12} />
               <span>{t('sendPanel.quick')}</span>
+            </Button>
+            <Button
+              variant={sendMode === 'modbus' ? 'default' : 'ghost'}
+              size="xs"
+              onClick={() => setSendMode('modbus')}
+              className="gap-1 h-6 px-2"
+            >
+              <Cpu size={12} />
+              <span>{t('sendPanel.modbus')}</span>
             </Button>
           </div>
         </div>
@@ -612,7 +631,7 @@ const SendPanel: React.FC<SendPanelProps> = ({
             )}
           </div>
         </>
-      ) : (
+      ) : sendMode === 'quickCommand' ? (
         /* Quick Command Mode */
         <div className="flex-1 min-h-0">
           <QuickCommandPanel
@@ -623,6 +642,13 @@ const SendPanel: React.FC<SendPanelProps> = ({
             onSendCommand={onSendQuickCommand}
             onSendSelected={onSendSelectedQuickCommands}
             disabled={isQuickModeDisabled}
+          />
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0">
+          <ModbusPanel
+            isConnected={isConnected}
+            onRequest={onModbusRequest}
           />
         </div>
       )}
