@@ -6,14 +6,14 @@ Tauri 2 + React 18 串口调试工具。前端在 `frontend/`，Rust 在 `src-ta
 
 ## 本地运行（macOS）
 
-本机通常没有 `cargo-tauri`。从仓库根目录：
+安装前端依赖后，从仓库根目录：
 
 ```bash
-cd frontend && npm install && npm run dev   # 终端 1，端口 5173
-npx @tauri-apps/cli@2 dev                   # 终端 2
+npm install --prefix frontend
+cargo tauri dev                             # 自动启动前端开发服务器（端口 5173）
 ```
 
-macOS 打包需要 `src-tauri/icons/` 里的 `icon.png` 和 `icon.icns`，不能只留 Windows 的 `icon.ico`。`tauri.conf.json` 的 `beforeBuildCommand` 会编前端；`beforeDevCommand` 没有配置，开发时要自己起 Vite。
+macOS 打包需要 `src-tauri/icons/` 里的 `icon.png` 和 `icon.icns`，不能只留 Windows 的 `icon.ico`。`tauri.conf.json` 的 `beforeDevCommand` 会自动启动 Vite，`beforeBuildCommand` 会编前端。
 
 ## 串口（macOS）
 

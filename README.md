@@ -117,16 +117,10 @@ The compiled application binaries will be located in:
 
 ### Development Mode
 
-Set up two terminal windows:
+After installing dependencies, run the following command from the project root. Tauri starts the frontend development server automatically:
 
 ```bash
-# Terminal 1: Start frontend development server
-cd frontend
-npm run dev
-```
-
-```bash
-# Terminal 2: Start Tauri development mode (from project root)
+npm install --prefix frontend
 cargo tauri dev
 ```
 
@@ -294,9 +288,8 @@ Create command lists for rapid execution:
 ### Building and Development Commands
 
 ```bash
-# Development server (requires two terminals)
-cd frontend && npm run dev          # Terminal 1: Frontend dev server
-cargo run tauri dev                     # Terminal 2: Tauri with live reload
+# Development mode (from project root; frontend starts automatically)
+cargo tauri dev
 
 # Production build
 cargo tauri build                   # Creates installer binaries

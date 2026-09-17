@@ -117,16 +117,10 @@ cargo tauri build
 
 ### 开发模式
 
-准备两个终端窗口：
+安装依赖后，从项目根目录运行以下命令即可；Tauri 会自动启动前端开发服务器：
 
 ```bash
-# 终端 1：启动前端开发服务器
-cd frontend
-npm run dev
-```
-
-```bash
-# 终端 2：启动 Tauri 开发模式（从项目根目录运行）
+npm install --prefix frontend
 cargo tauri dev
 ```
 
@@ -294,9 +288,8 @@ cargo tauri dev
 ### 构建和开发命令
 
 ```bash
-# 开发服务器（需要两个终端）
-cd frontend && npm run dev          # 终端 1：前端开发服务器
-cargo tauri dev                     # 终端 2：Tauri 热重载
+# 开发模式（从项目根目录运行，自动启动前端）
+cargo tauri dev
 
 # 生产构建
 cargo tauri build                   # 创建安装程序二进制文件
