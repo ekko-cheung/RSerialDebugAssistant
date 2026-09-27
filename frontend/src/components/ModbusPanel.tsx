@@ -71,8 +71,27 @@ const parseRegisterValues = (raw: string): number[] => {
 const formatHex = (bytes: number[]): string =>
   bytes.map((byte) => byte.toString(16).padStart(2, '0').toUpperCase()).join(' ');
 
-const formatRegister = (value: number): string =>
+const formatAddress = (value: number): string =>
   value + ' (0x' + value.toString(16).padStart(4, '0').toUpperCase() + ')';
+
+const getExceptionDescriptionKey = (code: number): string => {
+  const descriptions: Record<number, string> = {
+    0x01: 'illegalFunction',
+    0x02: 'illegalDataAddress',
+    0x03: 'illegalDataValue',
+    0x04: 'serverDeviceFailure',
+    0x05: 'acknowledge',
+    0x06: 'serverDeviceBusy',
+    0x08: 'memoryParityError',
+    0x0A: 'gatewayPathUnavailable',
+    0x0B: 'gatewayTargetFailedToRespond',
+  };
+
+  return 'modbus.exceptionDescriptions.' + (descriptions[code] ?? 'unknown');
+};
+
+const getFunctionLabelKey = (operation: ModbusFunction): string =>
+  functionOptions.find((item) => item.value === operation)?.labelKey ?? '';
 
 const ModbusPanel: React.FC<ModbusPanelProps> = ({ isConnected, onRequest }) => {
   const { colors } = useTheme();
@@ -85,7 +104,7 @@ const ModbusPanel: React.FC<ModbusPanelProps> = ({ isConnected, onRequest }) => 
   const [coilValues, setCoilValues] = useState('1, 0, 1');
   const [registerValues, setRegisterValues] = useState('0');
   const [isBusy, setIsBusy] = useState(false);
-  const [response, setResponse] = useState<ModbusResponse | null>(null);
+  const [result, setResult] = useState<{ request: ModbusRequest; response: ModbusResponse } | null>(null);
   const [error, setError] = useState('');
 
   const isReadCoils = readCoilFunctions.includes(operation);
@@ -96,10 +115,7 @@ const ModbusPanel: React.FC<ModbusPanelProps> = ({ isConnected, onRequest }) => 
 
   const quantityLimit = isReadCoils ? 2000 : isReadRegisters ? 125 : isMultipleWrite ? 1968 : 1;
 
-  const selectedFunctionLabel = useMemo(
-    () => t(functionOptions.find((item) => item.value === operation)?.labelKey ?? ''),
-    [operation, t],
-  );
+  const selectedFunctionLabel = useMemo(() => t(getFunctionLabelKey(operation)), [operation, t]);
 
   const buildRequest = (): ModbusRequest => {
     const parsedUnitId = parseInteger(unitId, t('modbus.unitId'), 247);
@@ -157,11 +173,12 @@ const ModbusPanel: React.FC<ModbusPanelProps> = ({ isConnected, onRequest }) => 
 
   const handleRequest = async () => {
     setError('');
-    setResponse(null);
+    setResult(null);
     setIsBusy(true);
     try {
-      const nextResponse = await onRequest(buildRequest());
-      setResponse(nextResponse);
+      const request = buildRequest();
+      const response = await onRequest(request);
+      setResult({ request, response });
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : String(requestError);
       setError(message);
@@ -326,46 +343,96 @@ const ModbusPanel: React.FC<ModbusPanelProps> = ({ isConnected, onRequest }) => 
           </Alert>
         )}
 
-        {response && (
+        {result && (
           <div
             className="mt-3 rounded-md border p-3 text-xs"
             style={{
-              borderColor: response.is_exception ? colors.danger : colors.borderLight,
+              borderColor: result.response.is_exception ? colors.danger : colors.borderLight,
               backgroundColor: colors.bgMain,
             }}
           >
-            <div className="flex items-center gap-1.5 font-medium" style={{ color: response.is_exception ? colors.danger : colors.success }}>
-              {response.is_exception ? <AlertCircle size={13} /> : <CheckCircle2 size={13} />}
-              {response.is_exception ? t('modbus.exceptionResponse') : t('modbus.success')}
-              {response.exception_code !== null && ' (' + response.exception_code.toString(16).padStart(2, '0').toUpperCase() + ')'}
+            <div className="flex items-center gap-1.5 font-medium" style={{ color: result.response.is_exception ? colors.danger : colors.success }}>
+              {result.response.is_exception ? <AlertCircle size={13} /> : <CheckCircle2 size={13} />}
+              {result.response.is_exception ? t('modbus.exceptionResponse') : t('modbus.success')}
+              {result.response.exception_code !== null && ' (' + result.response.exception_code.toString(16).padStart(2, '0').toUpperCase() + ')'}
             </div>
 
-            {response.is_exception ? (
-              <p className="mt-1" style={{ color: colors.textSecondary }}>
-                {t('modbus.exceptionCode')}: {response.exception_code}
-              </p>
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1" style={{ color: colors.textSecondary }}>
+              <div>{t('modbus.unitId')}: <span className="font-mono" style={{ color: colors.textPrimary }}>{result.response.unit_id}</span></div>
+              <div>{t('modbus.functionCode')}: <span className="font-mono" style={{ color: colors.textPrimary }}>0x{result.response.function_code.toString(16).padStart(2, '0').toUpperCase()}</span></div>
+              <div>{t('modbus.function')}: <span style={{ color: colors.textPrimary }}>{t(getFunctionLabelKey(result.request.function))}</span></div>
+              <div>{t('modbus.startAddress')}: <span className="font-mono" style={{ color: colors.textPrimary }}>{formatAddress(result.request.address)}</span></div>
+              <div>{t('modbus.quantity')}: <span className="font-mono" style={{ color: colors.textPrimary }}>{result.request.quantity}</span></div>
+              <div>{t('modbus.crcValid')}</div>
+            </div>
+
+            {result.response.is_exception ? (
+              <div className="mt-2" style={{ color: colors.textSecondary }}>
+                {t('modbus.exceptionCode')}: {result.response.exception_code?.toString(16).padStart(2, '0').toUpperCase()} — {t(getExceptionDescriptionKey(result.response.exception_code ?? -1))}
+              </div>
             ) : (
               <>
-                {response.coils.length > 0 && (
-                  <div className="mt-2">
-                    <span style={{ color: colors.textSecondary }}>{t('modbus.coils')}: </span>
-                    <span className="font-mono" style={{ color: colors.textPrimary }}>
-                      {response.coils.map((value) => (value ? '1' : '0')).join(' ')}
-                    </span>
+                {result.response.coils.length > 0 && (
+                  <div className="mt-3">
+                    <div className="mb-1 font-medium" style={{ color: colors.textPrimary }}>{t('modbus.coils')}</div>
+                    <div className="max-h-[240px] overflow-auto rounded border" style={{ borderColor: colors.borderLight }}>
+                      <table className="w-full text-left">
+                        <thead className="sticky top-0" style={{ backgroundColor: colors.bgSidebar, color: colors.textSecondary }}>
+                          <tr>
+                            <th className="px-2 py-1 font-medium">{t('modbus.address')}</th>
+                            <th className="px-2 py-1 font-medium">{t('modbus.state')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {result.response.coils.map((value, index) => (
+                            <tr key={index} className="border-t" style={{ borderColor: colors.borderLight }}>
+                              <td className="px-2 py-1 font-mono" style={{ color: colors.textPrimary }}>{formatAddress(result.request.address + index)}</td>
+                              <td className="px-2 py-1 font-mono" style={{ color: value ? colors.success : colors.textSecondary }}>{value ? t('modbus.on') : t('modbus.off')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
-                {response.registers.length > 0 && (
-                  <div className="mt-2">
-                    <span style={{ color: colors.textSecondary }}>{t('modbus.registers')}: </span>
-                    <span className="font-mono" style={{ color: colors.textPrimary }}>
-                      {response.registers.map(formatRegister).join('  ')}
-                    </span>
+
+                {result.response.registers.length > 0 && (
+                  <div className="mt-3">
+                    <div className="mb-1 font-medium" style={{ color: colors.textPrimary }}>{t('modbus.registers')}</div>
+                    <div className="max-h-[240px] overflow-auto rounded border" style={{ borderColor: colors.borderLight }}>
+                      <table className="w-full text-left">
+                        <thead className="sticky top-0" style={{ backgroundColor: colors.bgSidebar, color: colors.textSecondary }}>
+                          <tr>
+                            <th className="px-2 py-1 font-medium">{t('modbus.address')}</th>
+                            <th className="px-2 py-1 font-medium">HEX</th>
+                            <th className="px-2 py-1 font-medium">UInt16</th>
+                            <th className="px-2 py-1 font-medium">Int16</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {result.response.registers.map((value, index) => (
+                            <tr key={index} className="border-t" style={{ borderColor: colors.borderLight }}>
+                              <td className="px-2 py-1 font-mono" style={{ color: colors.textPrimary }}>{formatAddress(result.request.address + index)}</td>
+                              <td className="px-2 py-1 font-mono" style={{ color: colors.textPrimary }}>0x{value.toString(16).padStart(4, '0').toUpperCase()}</td>
+                              <td className="px-2 py-1 font-mono" style={{ color: colors.textPrimary }}>{value}</td>
+                              <td className="px-2 py-1 font-mono" style={{ color: colors.textPrimary }}>{value >= 0x8000 ? value - 0x10000 : value}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
-                {response.address !== null && response.value !== null && (
-                  <div className="mt-2" style={{ color: colors.textSecondary }}>
-                    {t('modbus.writeEcho')}: <span className="font-mono" style={{ color: colors.textPrimary }}>
-                      {t('modbus.address')} {response.address}, {t('modbus.value')} 0x{response.value.toString(16).padStart(4, '0').toUpperCase()}
+
+                {result.response.address !== null && result.response.value !== null && (
+                  <div className="mt-3 rounded border p-2" style={{ borderColor: colors.borderLight, color: colors.textSecondary }}>
+                    <span className="font-medium">{t('modbus.writeEcho')}: </span>
+                    <span className="font-mono" style={{ color: colors.textPrimary }}>
+                      {t('modbus.address')} {formatAddress(result.response.address)}{result.request.function === 'WriteMultipleCoils' || result.request.function === 'WriteMultipleRegisters'
+                        ? ', ' + t('modbus.quantity') + ' ' + result.response.value
+                        : result.request.function === 'WriteSingleCoil'
+                          ? ', ' + t('modbus.state') + ' ' + (result.response.value === 0xFF00 ? t('modbus.on') : t('modbus.off'))
+                          : ', ' + t('modbus.value') + ' 0x' + result.response.value.toString(16).padStart(4, '0').toUpperCase() + ' (' + result.response.value + ')'}
                     </span>
                   </div>
                 )}
@@ -375,7 +442,7 @@ const ModbusPanel: React.FC<ModbusPanelProps> = ({ isConnected, onRequest }) => 
             <div className="mt-2 pt-2 border-t" style={{ borderColor: colors.borderLight }}>
               <span style={{ color: colors.textSecondary }}>{t('modbus.rawFrame')}: </span>
               <span className="font-mono break-all" style={{ color: colors.textTertiary }}>
-                {formatHex(response.raw_frame)}
+                {formatHex(result.response.raw_frame)}
               </span>
             </div>
           </div>

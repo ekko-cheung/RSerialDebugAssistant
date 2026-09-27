@@ -1,13 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Settings, PanelLeftClose, PanelLeft, List, Terminal } from 'lucide-react';
 import PortSelector from './components/PortSelector';
 import ConfigPanel from './components/ConfigPanel';
 import LogViewer from './components/LogViewer';
 import SendPanel, { SEND_PANEL_MIN_HEIGHTS } from './components/SendPanel';
-import TerminalView from './components/TerminalView';
 import StatusBar from './components/StatusBar';
-import SettingsModal from './components/SettingsModal';
 import { SerialPortInfo, SerialConfig, LogEntry, ConnectionStatus, DataFormat, ChecksumConfig, QuickCommandList, QuickCommand, LineEnding, TextEncoding, FrameSegmentationConfig, ModbusRequest, ModbusResponse } from './types';
 import { useTheme } from './contexts/ThemeContext';
 import { useTranslation } from './i18n';
@@ -17,6 +15,9 @@ import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { Button } from './components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './components/ui/tooltip';
+
+const TerminalView = lazy(() => import('./components/TerminalView'));
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
 
 const QUICK_COMMANDS_STORAGE_KEY = 'serial-debug-quick-commands';
 const STORAGE_KEY_TEXT_ENCODING = 'serialDebug_textEncoding';
@@ -930,7 +931,9 @@ function App() {
           ) : (
             /* Terminal View */
             <div className="flex-1 min-h-0">
-              <TerminalView isConnected={connectionStatus.is_connected} />
+              <Suspense fallback={null}>
+                <TerminalView isConnected={connectionStatus.is_connected} />
+              </Suspense>
             </div>
           )}
         </div>
@@ -944,7 +947,11 @@ function App() {
       />
 
       {/* Settings Modal */}
-      <SettingsModal open={showSettings} onOpenChange={setShowSettings} />
+      {showSettings && (
+        <Suspense fallback={null}>
+          <SettingsModal open={showSettings} onOpenChange={setShowSettings} />
+        </Suspense>
+      )}
 
       {/* Toast Notifications */}
       <Toaster />
